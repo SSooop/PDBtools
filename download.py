@@ -1,5 +1,7 @@
 import os
 import sys
+import socket
+import re
 import urllib.request
 import argparse
 import time
@@ -58,6 +60,15 @@ class PDBLoader(object):
             if not os.path.exists(outpath): os.makedirs(outpath)
             try:
                 urllib.request.urlretrieve(url, outfnm)
+            except socket.timeout:
+                count = 1
+                while count <= 3:
+                    try:
+                        urllib.request.urlretrieve(url, outfnm)
+                        break
+                    except socket.timeout:
+                        print(f'Reloading for {count} times on {url}', file=sys.stdout)
+                        count += 1
             except Exception as err:
                 print(str(err), file=sys.stderr)
                 continue
@@ -66,16 +77,22 @@ class PDBLoader(object):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('pdb_list', type=str)
+    parser.add_argument('--split', type=str, default=None)
+    parser.add_argument('--re', type=str, default=None)
     parser.add_argument('--filetype', nargs='+')
     parser.add_argument('--load_gz', action='store_true', default=False)
     parser.add_argument('--dir', type=str, default='./data')
     parser.add_argument('--num_jobs', type=int, default=16)
+    parser.add_argument('--time_out', type=int, default=15)
     args = parser.parse_args()
 
     loader = PDBLoader(filetypes=args.filetype, download_gz=args.load_gz, datadir=args.dir)
     parallel = Parallel(n_jobs=args.num_jobs)
+    socket.setdefaulttimeout(args.time_out)
     with open(args.pdb_list, 'r') as pdb_list:
-        pdb = pdb_list.read().rstrip('\n').split(', ')
+        pdb = pdb_list.read().rstrip('\n').split(args.split)
+    if args.re is not None:
+        pdb = [re.findall(args.re, s) for s in pdb]
     print('Loading begin...')
     start = time.time()
     parallel(delayed(loader)(protein) for protein in tqdm(pdb))
