@@ -2,9 +2,11 @@ import os
 import sys
 import socket
 import re
+import shutil
 import urllib.request
 import argparse
 import time
+import itertools
 from typing import Union, List
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
@@ -53,6 +55,8 @@ class PDBLoader(object):
     def __call__(self, pdbcode: str):
         assert pdbcode is not None
 
+        missing = []
+
         for file, object_url in zip(self.file_suffix, self.url_prefix):
             url = object_url + pdbcode + file
             outpath = os.path.join(self.datadir, pdbcode)
@@ -71,7 +75,10 @@ class PDBLoader(object):
                         count += 1
             except Exception as err:
                 print(str(err) + f'when downloading {pdbcode}', file=sys.stderr)
+                missing.append(pdbcode)
                 continue
+        
+        return missing
 
 
 if __name__ == '__main__':
@@ -95,6 +102,21 @@ if __name__ == '__main__':
         pdb = [re.findall(args.re, s) for s in pdb]
     print('Loading begin...')
     start = time.time()
-    parallel(delayed(loader)(protein) for protein in tqdm(pdb))
+    missing_p = parallel(delayed(loader)(protein) for protein in tqdm(pdb))
     cost = start - time.time()
     print(f'Finished in {cost // 60} min {cost % 60:.1f} s!')
+
+    missing = list(itertools.chain(*missing_p))
+    if len(missing) > 0:
+        print(f'Log missing downloading target... missing target: {len(missing)}!')
+        with open(os.path.join(args.dir, 'missing.log')) as log:
+            log.write(' '.join(missing))
+        while True:
+            flag = input('Deleting empty file[Y/n]?\n')
+            if flag in ['Y', 'n']: break
+            else: 
+                print('Invalid input!\b')
+                time.sleep(0.5)
+        if flag == 'Y':
+            for pdbcode in missing:
+                shutil.rmtree(os.path.join(args.dir, pdbcode))
