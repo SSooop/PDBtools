@@ -42,7 +42,7 @@ class PDBLoader(object):
                 assert squeeze == True
             elif ftype == 'fasta':
                 url_prefix.append("https://www.rcsb.org/fasta/entry/")
-                file_suffix.append("")
+                file_suffix.append(".fasta")
                 assert squeeze == False
             else:
                 raise ValueError(f'Invalid type {ftype}.')
@@ -70,7 +70,7 @@ class PDBLoader(object):
                         print(f'Reloading for {count} times on {url}', file=sys.stdout)
                         count += 1
             except Exception as err:
-                print(str(err), file=sys.stderr)
+                print(str(err) + f'when downloading {pdbcode}', file=sys.stderr)
                 continue
 
 
