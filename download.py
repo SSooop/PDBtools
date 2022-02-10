@@ -73,8 +73,11 @@ class PDBLoader(object):
                     except socket.timeout:
                         print(f'Reloading for {count} times on {url}', file=sys.stdout)
                         count += 1
+                if count > 3:
+                    missing.append(pdbcode)
+                    print(f'Loading time out for {pdbcode}!')
             except Exception as err:
-                print(str(err) + f'when downloading {pdbcode}', file=sys.stderr)
+                print(str(err) + f' when downloading {pdbcode}', file=sys.stderr)
                 missing.append(pdbcode)
                 continue
         
