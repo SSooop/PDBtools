@@ -44,7 +44,7 @@ class PDBLoader(object):
                 assert squeeze == True
             elif ftype == 'fasta':
                 url_prefix.append("https://www.rcsb.org/fasta/entry/")
-                file_suffix.append(".fasta")
+                file_suffix.append("")
                 assert squeeze == False
             else:
                 raise ValueError(f'Invalid type {ftype}.')
