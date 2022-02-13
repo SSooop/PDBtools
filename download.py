@@ -92,7 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('--filetype', nargs='+')
     parser.add_argument('--load_gz', action='store_true', default=False)
     parser.add_argument('--dir', type=str, default='./data')
-    parser.add_argument('--num_jobs', type=int, default=16)
+    parser.add_argument('--num_jobs', type=int, default=128)
     parser.add_argument('--time_out', type=int, default=15)
     args = parser.parse_args()
 
