@@ -70,14 +70,14 @@ class BenchmarkScore(object):
         """
         if os.path.isfile(pdb1) and os.path.isfile(pdb2):
             out = subprocess.check_output([self.path, pdb1, pdb2])
-            self.lines = str(out).splitlines()
+            self.lines = str(out).split('\\n')
         else:
             raise Exception(f'Check that {pdb1} and {pdb2} exits!')
 
 # =============================================================================
 # Benchmark methods should be added here
 # =============================================================================
-@register_method('TMalign')
+@register_method('tmalign')
 class TMalign(BenchmarkScore):
     def __init__(self, path):
         super().__init__(path)
@@ -87,8 +87,9 @@ class TMalign(BenchmarkScore):
         super().__call__(pdb1, pdb2)
         for line in self.lines:
             data = re.sub(r'\s\s+', ' ', line).split(' ')
-            if data[0] == 'TM-score' and data[1] == '=':
-                self.tm_score.append(float(data[2]))
+            if data[0] == 'TM-score=':
+                self.tm_score.append(float(data[1]))
+        print(self.lines, self.tm_score)
         
         return self.tm_score[-1], self.lines
 # =============================================================================
@@ -150,5 +151,5 @@ if __name__ == '__main__':
         args.object_dataset, args.reference_dataset, log=args.log_dir, 
         backend=args.backend, methods=args.methods, )
     score_pd = benchmark()
-    with open(os.path.join(args.log_dir, 'benchmark.pt'), 'rw') as handle:
+    with open(os.path.join(args.log_dir, 'benchmark.pt'), 'wb') as handle:
         pickle.dump(score_pd, handle, protocol=pickle.HIGHEST_PROTOCOL)
