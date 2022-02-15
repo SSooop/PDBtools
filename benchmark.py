@@ -91,7 +91,6 @@ class TMalign(BenchmarkScore):
             data = re.sub(r'\s\s+', ' ', line).split(' ')
             if data[0] == 'TM-score=':
                 self.tm_score.append(float(data[1]))
-        print(self.lines, self.tm_score)
         
         return self.tm_score[-1], self.lines
 # =============================================================================
@@ -148,11 +147,12 @@ if __name__ == '__main__':
     parser.add_argument('reference_dataset', type=str)
     parser.add_argument('--methods', nargs='+')
     parser.add_argument('--log_dir', type=str, default='./log')
+    parser.add_argument('--num_workers', type=int, default=128)
     args = parser.parse_args()
 
     benchmark = Benchmark(
         args.object_dataset, args.reference_dataset, log=args.log_dir, 
         backend=args.backend, methods=args.methods, )
-    score_pd = benchmark()
+    score_pd = benchmark(args.num_workers)
     with open(os.path.join(args.log_dir, 'benchmark.pt'), 'wb') as handle:
         pickle.dump(score_pd, handle, protocol=pickle.HIGHEST_PROTOCOL)
