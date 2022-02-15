@@ -7,6 +7,8 @@ import subprocess
 import errno
 import logging
 import pandas as pd
+from joblib import Parallel, delayed
+from tqdm.auto import tqdm
 from typing import List
 
 _METHOD_DICT = {}
@@ -117,17 +119,18 @@ class Benchmark(object):
         logging.basicConfig(
             filename=os.path.join(log, 'output.log'), encoding='utf-8')
 
-    def __call__(self):
+    def __call__(self, num_jobs=128):
         score_frame = dict()
+        parallel = Parallel(n_jobs=num_jobs)
         for method in self.methods:
-            scores = list()
             print(f'Benchmark {method} begin...')
             logging.info(f'Benchmark for {method}\n# '+ '='*20 + '\n')
-            for point in self.matching_datapoints:
-                score, output = self.methods[method](
-                    self.obj_dataset[point], self.ref_dataset[point])
-                scores.append(score)
-                logging.info(output)
+            scores, outputs = zip(*parallel(
+                delayed(self.methods[method])(
+                self.obj_dataset[point], self.ref_dataset[point])
+                for point in tqdm(self.matching_datapoints)
+            ))
+            logging.info(outputs)
             score_frame[method] = scores
         
         return pd.DataFrame(
