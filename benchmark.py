@@ -20,8 +20,8 @@ def register_method(name):
     return decorator
 
 
-def get_methods(backend, namelist):
-    return {name: _METHOD_DICT[name](backend) for name in namelist}
+def get_methods(backends, namelist):
+    return {name: _METHOD_DICT[name](backend) for backend, name in zip(backends, namelist)}
 
 
 def setup_backend(path=None):
@@ -76,6 +76,7 @@ class BenchmarkScore(object):
         else:
             raise Exception(f'Check that {pdb1} and {pdb2} exits!')
 
+
 # =============================================================================
 # Benchmark methods should be added here
 # =============================================================================
@@ -93,13 +94,28 @@ class TMalign(BenchmarkScore):
                 self.tm_score.append(float(data[1]))
         
         return self.tm_score[-1], self.lines
+
+
+@register_method('tmscore')
+class TMscore(BenchmarkScore):
+    def __init__(self, path):
+        super().__init__(path)
+    
+    def __call__(self, pdb1, pdb2):
+        super().__call__(pdb1, pdb2)
+        for line in self.lines:
+            data = re.sub(r"\s\s+", " ", line).split(' ')
+            if data[0] == "TM-score" and data[1] == "=":
+                self.tm_score = float(data[2])
+        
+        return self.tm_score, self.lines
 # =============================================================================
 # Benchmark methods should be added here
 # =============================================================================
 
 
 class Benchmark(object):
-    def __init__(self, obj_path, ref_path, log, backend, methods: List[str] = None):
+    def __init__(self, obj_path, ref_path, log, backends: List[str] = None, methods: List[str] = None):
         """
         Args:
             obj_path: object path that contains all object pdb
@@ -112,7 +128,7 @@ class Benchmark(object):
         self.matching_datapoints = list(
             self.obj_dataset.keys() & self.ref_dataset.keys())
         assert len(methods) > 0, 'Please specify at least one method'
-        self.methods = get_methods(backend, methods)
+        self.methods = get_methods(backends, methods)
         if not os.path.exists(log): os.mkdir(log)
         self.log_path = log
         logging.basicConfig(
@@ -142,9 +158,9 @@ if __name__ == '__main__':
     import pickle
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('backend', type=str)
     parser.add_argument('object_dataset', type=str)
     parser.add_argument('reference_dataset', type=str)
+    parser.add_argument('--backend', nargs='+')
     parser.add_argument('--methods', nargs='+')
     parser.add_argument('--log_dir', type=str, default='./log')
     parser.add_argument('--num_workers', type=int, default=128)
@@ -152,7 +168,7 @@ if __name__ == '__main__':
 
     benchmark = Benchmark(
         args.object_dataset, args.reference_dataset, log=args.log_dir, 
-        backend=args.backend, methods=args.methods, )
+        backends=args.backend, methods=args.methods, )
     score_pd = benchmark(args.num_workers)
     with open(os.path.join(args.log_dir, 'benchmark.pt'), 'wb') as handle:
         pickle.dump(score_pd, handle, protocol=pickle.HIGHEST_PROTOCOL)
