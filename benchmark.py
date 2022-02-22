@@ -170,5 +170,5 @@ if __name__ == '__main__':
         args.object_dataset, args.reference_dataset, log=args.log_dir, 
         backends=args.backend, methods=args.methods, )
     score_pd = benchmark(args.num_workers)
-    with open(os.path.join(args.log_dir, 'benchmark.pt'), 'wb') as handle:
+    with open(os.path.join(args.log_dir, 'benchmark.pkl'), 'wb') as handle:
         pickle.dump(score_pd, handle, protocol=pickle.HIGHEST_PROTOCOL)
