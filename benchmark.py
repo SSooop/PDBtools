@@ -74,7 +74,7 @@ class BenchmarkScore(object):
             out = subprocess.check_output([self.path, pdb1, pdb2])
             self.lines = str(out).split('\\n')
         else:
-            raise Exception(f'Check that {pdb1} and {pdb2} exits!')
+            raise Exception(f'Check if {pdb1} and {pdb2} exits!')
 
 
 # =============================================================================
