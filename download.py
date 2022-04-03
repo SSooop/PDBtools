@@ -106,7 +106,7 @@ if __name__ == '__main__':
     print('Loading begin...')
     start = time.time()
     missing_p = parallel(delayed(loader)(protein) for protein in tqdm(pdb))
-    cost = start - time.time()
+    cost = time.time() - start
     print(f'Finished in {cost // 60} min {cost % 60:.1f} s!')
 
     missing = list(itertools.chain(*missing_p))
