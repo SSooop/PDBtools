@@ -100,9 +100,11 @@ if __name__ == '__main__':
     parallel = Parallel(n_jobs=args.num_jobs)
     socket.setdefaulttimeout(args.time_out)
     with open(args.pdb_list, 'r') as pdb_list:
-        pdb = pdb_list.read().rstrip('\n').split().split(args.split)
+        pdb = re.split(' |\n|'+args.split, pdb_list.read())
     if args.re is not None:
         pdb = [re.findall(args.re, s) for s in pdb]
+    else:
+        pdb = [s for s in pdb if len(s) == 4]
     print('Loading begin...')
     start = time.time()
     missing_p = parallel(delayed(loader)(protein) for protein in tqdm(pdb))
@@ -112,7 +114,7 @@ if __name__ == '__main__':
     missing = list(itertools.chain(*missing_p))
     if len(missing) > 0:
         print(f'Log missing downloading target... missing target: {len(missing)}!')
-        with open(os.path.join(args.dir, 'missing.log')) as log:
+        with open(os.path.join(args.dir, 'missing.log'), 'w') as log:
             log.write(' '.join(missing))
         while True:
             flag = input('Deleting empty file[Y/n]?\n')
