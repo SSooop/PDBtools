@@ -100,7 +100,9 @@ if __name__ == '__main__':
     parallel = Parallel(n_jobs=args.num_jobs)
     socket.setdefaulttimeout(args.time_out)
     with open(args.pdb_list, 'r') as pdb_list:
-        pdb = re.split(' |\n|'+args.split, pdb_list.read())
+        restring = ' |\n'
+        if args.split: restring = restring + '|' + args.split
+        pdb = re.split(restring, pdb_list.read())
     if args.re is not None:
         pdb = [re.findall(args.re, s) for s in pdb]
     else:
