@@ -12,6 +12,7 @@ from Bio.PDB.Structure import Structure
 from Bio.PDB import PDBParser, PDBIO
 from Bio.PDB.StructureBuilder import StructureBuilder
 from Bio.PDB.Polypeptide import three_to_one
+from Bio.PDB.PDBExceptions import PDBConstructionWarning
 
 STD_AA = ['GLY', 'ALA', 'SER', 'THR', 'ASP', 'GLU', 'VAL', 'ILE', 
           'TYR', 'TRP', 'LEU', 'PHE', 'ASN', 'GLN', 'PRO', 'MET', 
@@ -66,13 +67,17 @@ class TransFormer(object):
             Structure: A structure of Biopython. Rename the chain id with also the index and
             non-standard amino acids
         """
+        warnings.simplefilter('ignore', PDBConstructionWarning)
         builder = StructureBuilder()
         builder.init_structure(self.pdb_id)
         builder.init_model(0)
-        index_dict = {key: 0 for key in rename_map}
+        index_dict = {rename_map[key]: 0 for key in rename_map}
         def _build_chain(chain, chain_id):
-            if index_dict[chain_id] != 0:
-                index_dict[chain_id] += self.index_gap
+            if chain_id in index_dict:
+                if index_dict[chain_id] != 0:
+                    index_dict[chain_id] += self.index_gap
+            else:
+                index_dict[chain_id] = 0
             builder.init_chain(chain_id)
             builder.init_seg('    ')
             for res in chain:
@@ -122,6 +127,7 @@ class TransFormer(object):
             Structure: A structure of Biopython. Rename the chain id with also the index and
             non-standard amino acids
         """
+        warnings.simplefilter('ignore', PDBConstructionWarning)
         builder = StructureBuilder()
         builder.init_structure(self.pdb_id)
         builder.init_model(0)
@@ -134,6 +140,8 @@ class TransFormer(object):
                 if res_seq_before < gap:
                     res_seq_before += 1
                     continue
+                if res_seq_after >= len(seq):
+                    break
                 if res.get_resname() in STD_AA:
                     assert three_to_one(res.get_resname()) == seq[res_seq_after]
                     res_seq_after += 1
@@ -184,20 +192,19 @@ class TransFormer(object):
         if np.shape(bias) == (3, 1):
             bias = bias.squeeze()
         
+        warnings.simplefilter('ignore', PDBConstructionWarning)
         builder = StructureBuilder()
         builder.init_structure(self.pdb_id)
         builder.init_model(0)
         def _rotate_chain(chain, chain_id):
             builder.init_chain(chain_id)
             builder.init_seg('    ')
-            res_seq = 0
             for res in chain:
                 if res.get_resname() in STD_AA:
-                    res_seq += 1
                     builder.init_residue(
                         resname=res.get_resname(),
                         field=' ',
-                        resseq=res_seq,
+                        resseq=res.get_id()[1],
                         icode=' ',
                     )
                     for atom in res:
@@ -269,6 +276,21 @@ class ABTransFormer(TransFormer):
     
     
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument()
+    # rename PDB file
+    rename_test = './test/8D1T.pdb'
+    sample_transformer = TransFormer('8D1T', rename_test)
+    sample_transformer.rename_chain(
+        rename_map={'A': 'B', 'H': 'A', 'L': 'A'},
+        update=True
+    )
+    sample_transformer.save_pdb('./test/renamed_8D1T.pdb')
+    # trime PDB file
+    trimed_pdb = sample_transformer.trim_chain(
+        trim_dict={'A': 'VQLQQSGAEL'},
+    )
+    io = PDBIO()
+    io.set_structure(trimed_pdb)
+    io.save('./test/trimed_renamed_8D1T.pdb')
+    # Align PDB file
+    
+    
