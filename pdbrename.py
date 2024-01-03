@@ -1,11 +1,17 @@
 '''
-Transform anything in protein to make things simple
+Rename and reindex PDB file to make every PDB file a STANDARD PDB
+
+1. A STANDARD PDB file don't have index gap, with index begin with 1.
+2. A STANDARD PDB file has heavy chain id 'H' and light chain id 'L'.
+3. A STANDARD PDB file has 3D coordination aligned with other complex.
+4. A STANDARD PDB file has insertion code if and only if it is an aligned antibody.
 '''
 
 import os
 import warnings
 
 import numpy as np
+from typing import List
 from tmtools import tm_align
 from tmtools.io import get_residue_data
 from Bio.PDB.Structure import Structure
@@ -20,11 +26,12 @@ STD_AA = ['GLY', 'ALA', 'SER', 'THR', 'ASP', 'GLU', 'VAL', 'ILE',
 
 def isRotationMatrix(M: np.ndarray):
     tag = False
+    delta = 1e-12
     I = np.identity(M.shape[0])
-    if np.all((np.matmul(M, M.T)) == I) and (np.linalg.det(M)==1): tag = True
-    return tag   
+    if np.max((np.matmul(M, M.T)) - I) < delta and (np.linalg.det(M) - 1) < delta: tag = True
+    return tag
 
-class TransFormer(object):
+class Prename(object):
     """
         Tools to rename PDB chains, trim PDB structure and align sequence and structure
     """
@@ -196,8 +203,8 @@ class TransFormer(object):
         builder = StructureBuilder()
         builder.init_structure(self.pdb_id)
         builder.init_model(0)
-        def _rotate_chain(chain, chain_id):
-            builder.init_chain(chain_id)
+        def _rotate_chain(chain):
+            builder.init_chain(chain.id.strip())
             builder.init_seg('    ')
             for res in chain:
                 if res.get_resname() in STD_AA:
@@ -210,14 +217,14 @@ class TransFormer(object):
                     for atom in res:
                         builder.init_atom(
                             atom.get_name(),
-                            np.matmul(atom.get_coord(), rotation_matrix) + bias,
+                            np.matmul(rotation_matrix, atom.get_coord()) + bias,
                             atom.get_bfactor(),
                             atom.get_occupancy(),
                             atom.get_altloc(),
                             atom.get_fullname()
                         )
         for chain in self.structure[0]:
-            _rotate_chain(chain, chain.id.strip())
+            _rotate_chain(chain)
             
         if update:
             self.structure = builder.get_structure()
@@ -255,7 +262,7 @@ class TransFormer(object):
         io.save(saved_path)
         
         
-class ABTransFormer(TransFormer):
+class ABrename(Prename):
     """
         Transform antibodies.
     """
@@ -264,33 +271,95 @@ class ABTransFormer(TransFormer):
         Args:
             pdb_id (str): pdb id of the pdb file you want to deal with
             pdb_path (str): path of the pdb file
-            heavy_chain_id (str): heavy chain id
-            light_chain_id (str): light chain id
+            heavy_chain_id (str): heavy chain id, will be renamed to 'H'
+            light_chain_id (str): light chain id, will be renamed to 'L'
             index_gap (int, optional): index gap that will simulate a chain split
         """
         super.__init__(pdb_id, pdb_path, index_gap)
         self.rename_chain(rename_map={heavy_chain_id: 'H', light_chain_id: 'L'}, update=True)
     
-    def number_antibody(self, numbering_scheme: str='IMGT') -> Structure:
-        raise NotImplementedError
+    def number_antibody(self, heavy_numbering: List[str], light_numbering: List[str], update: bool=False) -> Structure:
+        """
+            Numbering PDB file using numbering index user provided
+        Args:
+            heavy_numbering (List[str]): any heavy chain numbering
+            light_numbering (List[str]): any light chain numbering
+            update (bool, optional): Whether to update self.structure. Defaults to False.
+
+        Returns:
+            Structure: A renumbered structure of Biopython
+        """
+        assert len(heavy_numbering) == len(self.get_chain_seq('H')), "heavy numbering don\'t match len range"
+        assert len(light_numbering) == len(self.get_chain_seq('L')), "light numbering don\'t match len range"
+        warnings.simplefilter('ignore', PDBConstructionWarning)
+        builder = StructureBuilder()
+        builder.init_structure(self.pdb_id)
+        builder.init_model(0)
+        def _add_numbering(chain, numbering=None):
+            builder.init_chain(chain.id.strip())
+            builder.init_seg('    ')
+            for idx, res in enumerate(chain):
+                if numbering is not None:
+                    resseq, icode = int(numbering[idx][:-1]), numbering[idx][-1]
+                else:
+                    resseq=idx+1
+                    icode=' '
+                builder.init_residue(
+                    resname=res.get_resname(),
+                    field=' ',
+                    resseq=resseq,
+                    icode=icode,
+                )
+                for atom in res:
+                    builder.init_atom(
+                        atom.get_name(),
+                        atom.get_coord(),
+                        atom.get_bfactor(),
+                        atom.get_occupancy(),
+                        atom.get_altloc(),
+                        atom.get_fullname()
+                    )
+        for chain in self.structure[0]:
+            if chain.id.strip() == 'H':
+                _add_numbering(chain, heavy_numbering)
+            elif chain.id.strip() == 'L':
+                _add_numbering(chain, light_numbering)
+            else:
+                _add_numbering(chain)
+        
+        if update:
+            self.structure = builder.get_structure()
+            
+        return builder.get_structure()
     
     
-if __name__ == '__main__':
-    # rename PDB file
-    rename_test = './test/8D1T.pdb'
-    sample_transformer = TransFormer('8D1T', rename_test)
-    sample_transformer.rename_chain(
-        rename_map={'A': 'B', 'H': 'A', 'L': 'A'},
-        update=True
-    )
-    sample_transformer.save_pdb('./test/renamed_8D1T.pdb')
-    # trime PDB file
-    trimed_pdb = sample_transformer.trim_chain(
-        trim_dict={'A': 'VQLQQSGAEL'},
-    )
-    io = PDBIO()
-    io.set_structure(trimed_pdb)
-    io.save('./test/trimed_renamed_8D1T.pdb')
-    # Align PDB file
-    
+# if __name__ == '__main__':
+#     # rename PDB file
+#     rename_test = './test/8D1T.pdb'
+#     sample_transformer = Prename('8D1T', rename_test)
+#     sample_transformer.rename_chain(
+#         rename_map={'A': 'B', 'H': 'A', 'L': 'A'},
+#         update=True
+#     )
+#     sample_transformer.save_pdb('./test/renamed_8D1T.pdb')
+#     # trime PDB file
+#     trimed_pdb = sample_transformer.trim_chain(
+#         trim_dict={'A': 'VQLQQSGAEL'},
+#     )
+#     io = PDBIO()
+#     io.set_structure(trimed_pdb)
+#     io.save('./test/trimed_renamed_8D1T.pdb')
+#     # Align PDB file
+#     align_obj = './test/8D1T_unbound.pdb'
+#     parser = PDBParser(QUIET=True)
+#     align_obj_pdb = parser.get_structure('8D1T', align_obj)
+#     sample_transformer.align_3D_to(
+#         chain_id='B',
+#         object_3D=align_obj_pdb,
+#         object_chain_id='A',
+#         update=True,
+#     )
+#     sample_transformer.save_pdb('./test/rotated_8D1T.pdb')
+#     # antibody numbering
+#     ab_transformer = ABrename('8D1T', rename_test, 'H', 'L')
     
